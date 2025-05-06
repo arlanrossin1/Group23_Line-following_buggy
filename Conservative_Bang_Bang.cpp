@@ -153,8 +153,8 @@ void updateSpeedISR()
 // speed control increases/decreases depending on speed of each wheel only 1 should be active at a time 
 void controlISR() //for straight lines 
 {
-        if (pl < 19){
-             lpow += 1;
+        if (pl < 19){        //pl and pr is the number of pulses in the time interval set
+             lpow += 1;      //by ticker_pulses
         }
         else if (pl > 21){
              lpow -= 1;
@@ -170,15 +170,15 @@ void controlISR() //for straight lines
 void lcontrolISR() // for left turns 
 {
         if (pl < 19){
-             rpow += 1;
-        }
-        else if (pl > 21){
-             rpow -= 1;
+            rpow += 1;              //lpow is set according to the value of rpow during lturn
+        }                           //so rpow has to be increased or decreased
+        else if (pl > 21){           
+            rpow -= 1;
         }     
 }
 void rcontrolISR() //for right turns 
 {
-        if (pr < 19){
+        if (pr < 19){               //same as lcontrolISR but for rturn
              lpow += 1;
         }
         else if (pr > 21){
@@ -187,22 +187,20 @@ void rcontrolISR() //for right turns
 }
 void endCheck() //check whether it's a line break or end of line
 {
-if (state == lturn){
-    lpow = -30, rpow = 30;
-    l.on(-30), r.on(30);
+if (state == lturn){       //this might happen when the buggy doesn't turn sharp enough to the left
+    l.go(-30), r.on(30);   //and loses the line because of that so the buggy will now turn aggressively 
+                           //to see if it catches the line again
 }
-else if (state == rturn){
-    lpow = 30, rpow =-30;
+else if (state == rturn){  //as above but for right
     l.on(30), r.on(-30);
 }
-else if (state == straight){
-    ticker_control.detach();
-    lpow = 24, rpow =24;
-    l.on(24), r.on(24);
+else if (state == straight){     //to slow the buggy down in case it is the end of the line 
+    ticker_control.detach();     //mainly here for higher speeds
+    l.on(25), r.on(25);
 }
-while (linefound == false){
-    if (mid.white() == true){
-        linefound = true;
+while (linefound == false){        //loops through the 3 sensors and if any detect the line sets linefound
+    if (mid.white() == true){      //as true so the timeout function has no effect     
+        linefound = true;          
         straightISR();
     }
     else if (rs.white() == true){
@@ -217,17 +215,17 @@ while (linefound == false){
 }
 void lineE() //stops buggy if line end
 {
-    if (linefound == false){
-       enable = 0;
+    if (linefound == false){        //if the line wasn't found during endcheck before this was called 
+       enable = 0;                  //the buggy will stop
        end = true;
     } 
 }
 
 void check() //checks if a sensor is reading a line then sends it to the appropriate state 
 {
-    if (mid.white() == true){
-        straightISR();
-    }
+    if (mid.white() == true){          //middle sensor first as the other 2 will be detected at this point 
+        straightISR();                 //so would never enter the straight line code otherwise 
+    }                                  //also keeps buggy speed higher
     else if (rs.white() == true){
         rturnISR();
     }
@@ -236,9 +234,9 @@ void check() //checks if a sensor is reading a line then sends it to the appropr
     }
     else {
         linefound = false;
-        lineEnd.attach(&lineE, 0.3);
+        lineEnd.attach(&lineE, 0.3);  
         endCheck();
-        //timeout 25ms seperate function to repeatedly check for line and set bool to true or false
+        //timeout 0.3s seperate function to repeatedly check for line and set bool to true or false
         //then depending whether value is true or false return to mainline or ending at timeout
     }
 
@@ -252,7 +250,7 @@ void turnaround(){
                 while (one80 == false){
                     if (mid.white() == true){   //resumes straight line code when middle sensor detects the line again 
                         one80 = true;
-                        ticker_updateSpeed.attach(&updateSpeedISR,0.05); //reattaches speed ticker for mainline code
+                        ticker_updateSpeed.attach(&updateSpeedISR,0.02); //reattaches speed ticker for mainline code
                         straightISR();
                     }
                 }
@@ -264,7 +262,6 @@ if (hm10.readable()) {
             if(a == 't'){
                 //turnaround COMMAND RECEIVED
                 turnaround(); 
-                // clear the command buffer after we have parsed the command
             }
     }
 }
@@ -272,14 +269,13 @@ if (hm10.readable()) {
 
 int main() {
     //initial ticker setup
-    ticker_pulses.attach(&pulsesISR,0.02);       
-    ticker_control.attach(&controlISR,0.02);
+    ticker_pulses.attach(&pulsesISR,0.02);       //the 3 tickers work together so should be set to the same time 
+    ticker_control.attach(&controlISR,0.02);     //also true for lcontrol and rcontrol
     ticker_updateSpeed.attach(&updateSpeedISR,0.02);
     //hm10 setup
     hm10.attach(&BLEISR, Serial::RxIrq); //interrupts when BLE command is recieved
     hm10.baud(9600);
-    //ll.initialReading();
-    //rl.initialReading();
+
 
 
             //motor setup
@@ -308,16 +304,16 @@ int main() {
                 }
                 break;
             case (lturn) :
-                ticker_control.detach(), ticker_rcontrol.detach(), ticker_lcontrol.attach(&lcontrolISR,0.05);   //sets up left speed control and turns of the others 
+                ticker_control.detach(), ticker_rcontrol.detach(), ticker_lcontrol.attach(&lcontrolISR,0.02);   //sets up left speed control and turns off the others 
                 while (state == lturn) {
-                    lpow = rpow * 0.25;  //sets left motor pwm proportionally to the right motor so it will turn with speed control
+                    lpow = rpow * 0.25;  //sets left motor pwm proportionally to the right motor which is adjusted with control ISRs
                     check();
                 }
                 break;
             case (rturn) :
-                ticker_control.detach(), ticker_lcontrol.detach(), ticker_rcontrol.attach(&rcontrolISR,0.05);  //sets up right speed control and turns of the others 
+                ticker_control.detach(), ticker_lcontrol.detach(), ticker_rcontrol.attach(&rcontrolISR,0.02);  //sets up right speed control and turns off the others 
                 while (state == rturn) {
-                    rpow = lpow * 0.25;   //sets right motor pwm proportionally to the left motor so it will turn with speed control
+                    rpow = lpow * 0.25;   //sets right motor pwm proportionally to the left motor which is adjusted with control ISRs
                     check();   
                 }
                 break;
